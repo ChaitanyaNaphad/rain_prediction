@@ -1,0 +1,86 @@
+import streamlit as st
+import pandas as pd
+import numpy as np
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from sklearn.impute import SimpleImputer
+from sklearn.ensemble import GradientBoostingRegressor
+from sklearn.metrics import mean_squared_error, r2_score
+
+# -------------------------------------------------------
+# 1️⃣ Load and Prepare Data
+# -------------------------------------------------------
+df = pd.read_csv(r"E:\all_csv\Final_Rainfall_mm.csv")
+
+# Ensure numeric columns
+cols = ['pressure','maxtemp','temparature','mintemp','dewpoint',
+        'humidity','cloud','windspeed','rainfall']
+for col in cols:
+    df[col] = pd.to_numeric(df[col], errors='coerce')
+
+# Features and target
+X = df[['pressure','maxtemp','temparature','mintemp','dewpoint',
+        'humidity','cloud','windspeed']]
+y = df['rainfall']
+
+# Handle missing values
+imputer_X = SimpleImputer(strategy='mean')
+imputer_y = SimpleImputer(strategy='mean')
+X = imputer_X.fit_transform(X)
+y = imputer_y.fit_transform(y.values.reshape(-1, 1)).ravel()
+
+# Train-test split
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.2, random_state=42
+)
+
+# Scale inputs
+scaler = StandardScaler()
+X_train_scaled = scaler.fit_transform(X_train)
+X_test_scaled = scaler.transform(X_test)
+
+# Train model
+gbr = GradientBoostingRegressor(
+    n_estimators=500,
+    learning_rate=0.05,
+    max_depth=4,
+    random_state=42
+)
+gbr.fit(X_train_scaled, y_train)
+
+# Model evaluation
+y_pred = gbr.predict(X_test_scaled)
+mse = mean_squared_error(y_test, y_pred)
+r2 = r2_score(y_test, y_pred)
+
+# -------------------------------------------------------
+# Streamlit UI
+# -------------------------------------------------------
+st.title("🌧️ Rainfall Prediction Web App")
+st.write("This app predicts **rainfall (mm)** using a trained Gradient Boosting Machine model.")
+
+st.subheader("📊 Model Performance")
+st.write(f"**Mean Squared Error:** {mse:.4f}")
+st.write(f"**R² Score:** {r2:.4f}")
+
+st.subheader("🌡️ Enter Weather Parameters")
+
+# Create input fields
+pressure = st.number_input("Pressure", step=0.1)
+maxtemp = st.number_input("Max Temperature", step=0.1)
+temparature = st.number_input("Temperature", step=0.1)
+mintemp = st.number_input("Min Temperature", step=0.1)
+dewpoint = st.number_input("Dew Point", step=0.1)
+humidity = st.number_input("Humidity (%)", step=0.1)
+cloud = st.number_input("Cloud (%)", step=0.1)
+windspeed = st.number_input("Wind Speed", step=0.1)
+
+if st.button("Predict Rainfall"):
+    
+    X_new = np.array([[pressure, maxtemp, temparature, mintemp, dewpoint,
+                       humidity, cloud, windspeed]])
+
+    X_new_scaled = scaler.transform(X_new)
+    y_new = gbr.predict(X_new_scaled)
+
+    st.success(f"🌧️ **Predicted Rainfall: {y_new[0]:.2f} mm**")
