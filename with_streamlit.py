@@ -10,7 +10,7 @@ from sklearn.metrics import mean_squared_error, r2_score
 # -------------------------------------------------------
 # 1️⃣ Load and Prepare Data
 # -------------------------------------------------------
-df = pd.read_csv(r"E:\all_csv\Final_Rainfall_mm.csv")
+df = pd.read_csv("https://raw.githubusercontent.com/ChaitanyaNaphad/rain_prediction/main/Final_Rainfall_mm.csv")
 
 # Ensure numeric columns
 cols = ['pressure','maxtemp','temparature','mintemp','dewpoint',
@@ -82,5 +82,6 @@ if st.button("Predict Rainfall"):
 
     X_new_scaled = scaler.transform(X_new)
     y_new = gbr.predict(X_new_scaled)
+
 
     st.success(f"🌧️ **Predicted Rainfall: {y_new[0]:.2f} mm**")
