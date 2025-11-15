@@ -9,14 +9,16 @@ from sklearn.ensemble import GradientBoostingRegressor
 from sklearn.metrics import mean_squared_error, r2_score
 
 # -------------------------------------------------------
-# 🔥 Firebase URL
+# 🔥 Firebase Base URL
 # -------------------------------------------------------
 FIREBASE_URL = "https://rain-prediction-e5448-default-rtdb.asia-southeast1.firebasedatabase.app"
 
 # -------------------------------------------------------
 # 1️⃣ Load and Prepare Data
 # -------------------------------------------------------
-df = pd.read_csv("https://raw.githubusercontent.com/ChaitanyaNaphad/rain_prediction/main/Final_Rainfall_mm.csv")
+df = pd.read_csv(
+    "https://raw.githubusercontent.com/ChaitanyaNaphad/rain_prediction/main/Final_Rainfall_mm.csv"
+)
 
 cols = ['pressure','maxtemp','temparature','mintemp','dewpoint',
         'humidity','cloud','windspeed','rainfall']
@@ -57,7 +59,7 @@ r2 = r2_score(y_test, y_pred)
 # Streamlit UI
 # -------------------------------------------------------
 st.title("🌧️ Rainfall Prediction Web App")
-st.write("Predict **rainfall (mm)** using ML + send result to Firebase.")
+st.write("Predict **rainfall (mm)** using ML and save results to Firebase.")
 
 st.subheader("📊 Model Performance")
 st.write(f"**Mean Squared Error:** {float(mse):.4f}")
@@ -74,6 +76,9 @@ humidity = st.number_input("Humidity (%)", step=0.1)
 cloud = st.number_input("Cloud (%)", step=0.1)
 windspeed = st.number_input("Wind Speed", step=0.1)
 
+# -------------------------------------------------------
+# 2️⃣ Predict Rainfall + Upload to Firebase
+# -------------------------------------------------------
 if st.button("Predict Rainfall"):
 
     X_new = np.array([[pressure, maxtemp, temparature, mintemp,
@@ -82,13 +87,13 @@ if st.button("Predict Rainfall"):
     X_new_scaled = scaler.transform(X_new)
     y_new = gbr.predict(X_new_scaled)
 
-    predicted_value = float(y_new[0])
+    predicted_value = float(y_new[0])   # convert to normal number
 
     st.success(f"🌧️ **Predicted Rainfall: {predicted_value:.2f} mm**")
 
-    # -------------------------------------------------------
-    # 🔥 Upload to Firebase (all values stored as True numbers)
-    # -------------------------------------------------------
+    # ------------------------------------------
+    # Prepare clean numeric Firebase data
+    # ------------------------------------------
     data = {
         "pressure": float(pressure),
         "maxtemp": float(maxtemp),
@@ -98,14 +103,17 @@ if st.button("Predict Rainfall"):
         "humidity": float(humidity),
         "cloud": float(cloud),
         "windspeed": float(windspeed),
-        "prediction": float(predicted_value),
+        "prediction_mm": predicted_value,     # clean number
         "status": "High" if predicted_value > 50 else "Normal"
     }
 
+    # ------------------------------------------
+    # Upload to Firebase
+    # ------------------------------------------
     firebase_endpoint = f"{FIREBASE_URL}/predictions.json"
     response = requests.post(firebase_endpoint, json=data)
 
     if response.status_code == 200:
-        st.success("📡 Prediction uploaded to Firebase (with all numeric values)!")
+        st.success("📡 Prediction successfully uploaded to Firebase!")
     else:
         st.error("❌ Failed to upload prediction to Firebase.")
