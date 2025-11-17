@@ -5,6 +5,11 @@ import requests
 import os
 
 # -------------------------------------------------------
+# Firebase URL
+# -------------------------------------------------------
+FIREBASE_URL = "https://rain-prediction-e5448-default-rtdb.asia-southeast1.firebasedatabase.app"
+
+# -------------------------------------------------------
 # URLs of Model & Scaler stored in GitHub (RAW LINKS)
 # -------------------------------------------------------
 MODEL_URL = "https://raw.githubusercontent.com/ChaitanyaNaphad/rain_prediction/main/rain_model.pkl"
@@ -42,9 +47,8 @@ model, scaler = load_model_and_scaler()
 # -------------------------------------------------------
 # Streamlit UI
 # -------------------------------------------------------
-
 st.title("🌧️ Rainfall Prediction Web App")
-st.write("This app predicts **rainfall (mm)** using a trained Gradient Boosting model stored on GitHub.")
+st.write("Predict **rainfall (mm)** using a trained model stored on GitHub & upload results to Firebase.")
 
 st.subheader("🌡️ Enter Weather Parameters")
 
@@ -66,6 +70,30 @@ if st.button("Predict Rainfall"):
                        dewpoint, humidity, cloud, windspeed]])
 
     X_new_scaled = scaler.transform(X_new)
-    prediction = model.predict(X_new_scaled)[0]
+    prediction = float(model.predict(X_new_scaled)[0])
 
     st.success(f"🌧️ **Predicted Rainfall: {prediction:.2f} mm**")
+
+    # -------------------------------------------------------
+    # Upload to Firebase
+    # -------------------------------------------------------
+    data = {
+        "pressure": float(pressure),
+        "maxtemp": float(maxtemp),
+        "temparature": float(temparature),
+        "mintemp": float(mintemp),
+        "dewpoint": float(dewpoint),
+        "humidity": float(humidity),
+        "cloud": float(cloud),
+        "windspeed": float(windspeed),
+        "prediction_mm": prediction,
+        "status": "High" if prediction > 50 else "Normal"
+    }
+
+    firebase_endpoint = f"{FIREBASE_URL}/predictions.json"
+    response = requests.post(firebase_endpoint, json=data)
+
+    if response.status_code == 200:
+        st.success("📡 Data uploaded to Firebase successfully!")
+    else:
+        st.error("❌ Failed to upload data to Firebase")
