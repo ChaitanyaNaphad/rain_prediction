@@ -5,9 +5,9 @@ import requests
 import os
 
 # -------------------------------------------------------
-# Firebase URL
+# Firebase URL  (IMPORTANT: Add trailing slash '/')
 # -------------------------------------------------------
-FIREBASE_URL = "https://rain-prediction-e5448-default-rtdb.asia-southeast1.firebasedatabase.app"
+FIREBASE_URL = "https://rain-prediction-e5448-default-rtdb.asia-southeast1.firebasedatabase.app/"
 
 # -------------------------------------------------------
 # URLs of Model & Scaler stored in GitHub (RAW LINKS)
@@ -90,10 +90,11 @@ if st.button("Predict Rainfall"):
         "status": "High" if prediction > 50 else "Normal"
     }
 
-    firebase_endpoint = f"{FIREBASE_URL}/predictions.json"
+    firebase_endpoint = f"{FIREBASE_URL}predictions.json"
+
     response = requests.post(firebase_endpoint, json=data)
 
     if response.status_code == 200:
         st.success("📡 Data uploaded to Firebase successfully!")
     else:
-        st.error("❌ Failed to upload data to Firebase")
+        st.error(f"❌ Failed to upload data to Firebase. Error: {response.text}")
