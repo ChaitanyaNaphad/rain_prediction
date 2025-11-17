@@ -1,99 +1,75 @@
 import streamlit as st
-import numpy as np
+import pandas as pd
 import joblib
 import requests
-import os
+import datetime
 
-# -------------------------------------------------------
-# Firebase URL
-# -------------------------------------------------------
-FIREBASE_URL = "https://rain-prediction-e5448-default-rtdb.asia-southeast1.firebasedatabase.app"
+# ------------------------------
+# LOAD MODEL & SCALER
+# ------------------------------
+model_path = r"E:\python\ml_project\rain_model.pkl"
+scaler_path = r"E:\python\ml_project\scaler.pkl"
 
-# -------------------------------------------------------
-# URLs of Model & Scaler stored in GitHub (RAW LINKS)
-# -------------------------------------------------------
-MODEL_URL = "https://raw.githubusercontent.com/ChaitanyaNaphad/rain_prediction/main/rain_model.pkl"
-SCALER_URL = "https://raw.githubusercontent.com/ChaitanyaNaphad/rain_prediction/main/scaler.pkl"
+model = joblib.load(model_path)
+scaler = joblib.load(scaler_path)
 
-# -------------------------------------------------------
-# Download + Load Model & Scaler
-# -------------------------------------------------------
-@st.cache_resource
-def load_model_and_scaler():
+# ------------------------------
+# FIREBASE CONFIG
+# ------------------------------
+FIREBASE_URL = "https://rain-prediction-e5448-default-rtdb.asia-southeast1.firebasedatabase.app/"  
+# IMPORTANT — must end with '/'
 
-    model_path = "rain_model.pkl"
-    scaler_path = "scaler.pkl"
+# ------------------------------
+# APP UI
+# ------------------------------
+st.title("🌧️ Rainfall Prediction System")
+st.write("Enter the values below to predict rainfall")
 
-    # --- Download model file if not exists ---
-    if not os.path.exists(model_path):
-        r = requests.get(MODEL_URL)
-        open(model_path, "wb").write(r.content)
+rainfall = st.number_input("Rainfall (mm)", 0.0, 500.0, 10.0)
+maxtemp = st.number_input("Max Temperature (°C)", 0.0, 60.0, 30.0)
+mintemp = st.number_input("Min Temperature (°C)", 0.0, 60.0, 20.0)
+humidity = st.number_input("Humidity (%)", 0.0, 100.0, 60.0)
+wind_speed = st.number_input("Wind Speed (km/h)", 0.0, 200.0, 10.0)
 
-    # --- Download scaler file if not exists ---
-    if not os.path.exists(scaler_path):
-        r = requests.get(SCALER_URL)
-        open(scaler_path, "wb").write(r.content)
+if st.button("Predict"):
+    try:
+        # ------------------------------
+        # PREPARE INPUT
+        # ------------------------------
+        input_data = pd.DataFrame([[rainfall, maxtemp, mintemp, humidity, wind_speed]],
+                                  columns=['rainfall', 'maxtemp', 'mintemp', 'humidity', 'wind_speed'])
 
-    # --- Load using joblib ---
-    model = joblib.load(model_path)
-    scaler = joblib.load(scaler_path)
+        scaled_input = scaler.transform(input_data)
+        prediction = model.predict(scaled_input)[0]
 
-    return model, scaler
+        st.success(f"🌧️ Predicted Rainfall: **{prediction:.2f} mm**")
 
+        # ------------------------------
+        # PREPARE FIREBASE DATA
+        # ------------------------------
+        data = {
+            "timestamp": datetime.datetime.now().isoformat(),
+            "rainfall": rainfall,
+            "maxtemp": maxtemp,
+            "mintemp": mintemp,
+            "humidity": humidity,
+            "wind_speed": wind_speed,
+            "predicted_rainfall": float(prediction)
+        }
 
-# Load once (cached)
-model, scaler = load_model_and_scaler()
+        # ------------------------------
+        # POST TO FIREBASE
+        # ------------------------------
+        firebase_endpoint = FIREBASE_URL + "predictions.json"
+        response = requests.post(firebase_endpoint, json=data)
 
-# -------------------------------------------------------
-# Streamlit UI
-# -------------------------------------------------------
-st.title("🌧️ Rainfall Prediction Web App")
-st.write("Predict **rainfall (mm)** using a trained model stored on GitHub & upload results to Firebase.")
+        st.write("📡 Firebase Upload Status:", response.status_code)
+        st.write("🔍 Firebase Response:", response.text)
 
-st.subheader("🌡️ Enter Weather Parameters")
+        if response.status_code == 200:
+            st.success("✅ Prediction uploaded to Firebase!")
+        else:
+            st.error("❌ Failed to upload to Firebase. Check logs above.")
 
-pressure = st.number_input("Pressure", step=0.1)
-maxtemp = st.number_input("Max Temperature", step=0.1)
-temparature = st.number_input("Temperature", step=0.1)
-mintemp = st.number_input("Min Temperature", step=0.1)
-dewpoint = st.number_input("Dew Point", step=0.1)
-humidity = st.number_input("Humidity (%)", step=0.1)
-cloud = st.number_input("Cloud (%)", step=0.1)
-windspeed = st.number_input("Wind Speed", step=0.1)
-
-# -------------------------------------------------------
-# Predict Button
-# -------------------------------------------------------
-if st.button("Predict Rainfall"):
-
-    X_new = np.array([[pressure, maxtemp, temparature, mintemp,
-                       dewpoint, humidity, cloud, windspeed]])
-
-    X_new_scaled = scaler.transform(X_new)
-    prediction = float(model.predict(X_new_scaled)[0])
-
-    st.success(f"🌧️ **Predicted Rainfall: {prediction:.2f} mm**")
-
-    # -------------------------------------------------------
-    # Upload to Firebase
-    # -------------------------------------------------------
-    data = {
-        "pressure": float(pressure),
-        "maxtemp": float(maxtemp),
-        "temparature": float(temparature),
-        "mintemp": float(mintemp),
-        "dewpoint": float(dewpoint),
-        "humidity": float(humidity),
-        "cloud": float(cloud),
-        "windspeed": float(windspeed),
-        "prediction_mm": prediction,
-        "status": "High" if prediction > 50 else "Normal"
-    }
-
-    firebase_endpoint = f"{FIREBASE_URL}/predictions.json"
-    response = requests.post(firebase_endpoint, json=data)
-
-    if response.status_code == 200:
-        st.success("📡 Data uploaded to Firebase successfully!")
-    else:
-        st.error("❌ Failed to upload data to Firebase")
+    except Exception as e:
+        st.error(f"❌ Error: {e}")
