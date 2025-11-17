@@ -1,30 +1,50 @@
 import streamlit as st
-import pandas as pd
 import numpy as np
-import requests
 import joblib
+import requests
+import os
 
 # -------------------------------------------------------
-# 🔥 Firebase Base URL
+# URLs of Model & Scaler stored in GitHub (RAW LINKS)
 # -------------------------------------------------------
-FIREBASE_URL = "https://rain-prediction-e5448-default-rtdb.asia-southeast1.firebasedatabase.app"
-
-# -------------------------------------------------------
-# 1️⃣ Load Pretrained Model + Scaler
-# -------------------------------------------------------
-
 MODEL_URL = "https://raw.githubusercontent.com/ChaitanyaNaphad/rain_prediction/main/rain_model.pkl"
 SCALER_URL = "https://raw.githubusercontent.com/ChaitanyaNaphad/rain_prediction/main/scaler.pkl"
 
-# Download and load PKL files directly from GitHub Raw
-gbr = joblib.load(MODEL_URL)
-scaler = joblib.load(SCALER_URL)
+# -------------------------------------------------------
+# Download + Load Model & Scaler
+# -------------------------------------------------------
+@st.cache_resource
+def load_model_and_scaler():
+
+    model_path = "rain_model.pkl"
+    scaler_path = "scaler.pkl"
+
+    # --- Download model file if not exists ---
+    if not os.path.exists(model_path):
+        r = requests.get(MODEL_URL)
+        open(model_path, "wb").write(r.content)
+
+    # --- Download scaler file if not exists ---
+    if not os.path.exists(scaler_path):
+        r = requests.get(SCALER_URL)
+        open(scaler_path, "wb").write(r.content)
+
+    # --- Load using joblib ---
+    model = joblib.load(model_path)
+    scaler = joblib.load(scaler_path)
+
+    return model, scaler
+
+
+# Load once (cached)
+model, scaler = load_model_and_scaler()
 
 # -------------------------------------------------------
 # Streamlit UI
 # -------------------------------------------------------
+
 st.title("🌧️ Rainfall Prediction Web App")
-st.write("Predict **rainfall (mm)** using a pretrained ML model and save results to Firebase.")
+st.write("This app predicts **rainfall (mm)** using a trained Gradient Boosting model stored on GitHub.")
 
 st.subheader("🌡️ Enter Weather Parameters")
 
@@ -38,39 +58,14 @@ cloud = st.number_input("Cloud (%)", step=0.1)
 windspeed = st.number_input("Wind Speed", step=0.1)
 
 # -------------------------------------------------------
-# 2️⃣ Predict Rainfall + Upload to Firebase
+# Predict Button
 # -------------------------------------------------------
 if st.button("Predict Rainfall"):
 
-    X_new = np.array([
-        [pressure, maxtemp, temparature, mintemp,
-         dewpoint, humidity, cloud, windspeed]
-    ])
+    X_new = np.array([[pressure, maxtemp, temparature, mintemp,
+                       dewpoint, humidity, cloud, windspeed]])
 
     X_new_scaled = scaler.transform(X_new)
-    y_new = gbr.predict(X_new_scaled)
+    prediction = model.predict(X_new_scaled)[0]
 
-    predicted_value = float(y_new[0])
-
-    st.success(f"🌧️ **Predicted Rainfall: {predicted_value:.2f} mm**")
-
-    data = {
-        "pressure": float(pressure),
-        "maxtemp": float(maxtemp),
-        "temparature": float(temparature),
-        "mintemp": float(mintemp),
-        "dewpoint": float(dewpoint),
-        "humidity": float(humidity),
-        "cloud": float(cloud),
-        "windspeed": float(windspeed),
-        "prediction_mm": predicted_value,
-        "status": "High" if predicted_value > 50 else "Normal"
-    }
-
-    firebase_endpoint = f"{FIREBASE_URL}/predictions.json"
-    response = requests.post(firebase_endpoint, json=data)
-
-    if response.status_code == 200:
-        st.success("📡 Prediction successfully uploaded to Firebase!")
-    else:
-        st.error("❌ Failed to upload prediction to Firebase.")
+    st.success(f"🌧️ **Predicted Rainfall: {prediction:.2f} mm**")
